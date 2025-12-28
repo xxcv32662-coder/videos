@@ -1,13 +1,956 @@
-let currentUser = null;
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VidSphere</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f0f0f;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        /* شاشة البداية */
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0f0f0f;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            transition: opacity 0.5s;
+        }
+
+        #splash-screen.hide {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .splash-logo {
+            width: 300px;
+            margin-bottom: 40px;
+            animation: fadeIn 0.8s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .splash-loading-bar {
+            width: 300px;
+            height: 4px;
+            background-color: #272727;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .splash-loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #ff0000, #cc0000);
+            width: 0%;
+            animation: loadProgress 1.5s ease-in-out forwards;
+        }
+
+        @keyframes loadProgress {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        /* شريط التحميل */
+        #loading-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #ff0000, #cc0000);
+            z-index: 9999;
+            transition: width 0.3s;
+        }
+
+        /* الهيدر */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 24px;
+            background-color: #0f0f0f;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            gap: 16px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .logo img {
+            width: 120px;
+            height: auto;
+        }
+
+        .search-container {
+            flex: 1;
+            max-width: 600px;
+            display: flex;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 16px;
+            background-color: #121212;
+            border: 1px solid #303030;
+            border-radius: 40px 0 0 40px;
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: #1c62b9;
+        }
+
+        .search-btn {
+            padding: 0 24px;
+            background-color: #222;
+            border: 1px solid #303030;
+            border-left: none;
+            border-radius: 0 40px 40px 0;
+            cursor: pointer;
+            color: #fff;
+        }
+
+        .search-btn:hover {
+            background-color: #303030;
+        }
+
+        .upload-btn {
+            background-color: #cc0000;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+
+        .upload-btn:hover {
+            background-color: #ff0000;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #ff0000;
+        }
+
+        /* المحتوى الرئيسي */
+        .main-content {
+            padding: 24px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .videos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .video-card {
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .video-card:hover {
+            transform: scale(1.02);
+        }
+
+        .video-thumbnail {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-duration {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 2px 6px;
+            border-radius: 2px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .video-info {
+            display: flex;
+            margin-top: 12px;
+            gap: 12px;
+        }
+
+        .channel-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff0000, #cc0000);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .video-details h3 {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            line-height: 1.4;
+            max-height: 2.8em;
+            overflow: hidden;
+        }
+
+        .video-meta {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        /* مشغل الفيديو */
+        .video-player-page {
+            display: none;
+            background-color: #0f0f0f;
+        }
+
+        .video-player-page.active {
+            display: block;
+        }
+
+        .player-container {
+            display: flex;
+            gap: 24px;
+            padding: 24px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .player-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .video-player-wrapper {
+            position: relative;
+            width: 100%;
+            background-color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .video-player-wrapper video {
+            width: 100%;
+            display: block;
+        }
+
+        .video-player-wrapper.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            border-radius: 0;
+        }
+
+        .player-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            padding: 40px 16px 16px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .player-controls button {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+        }
+
+        .player-controls button:hover {
+            color: #ff0000;
+        }
+
+        .settings-menu {
+            position: absolute;
+            bottom: 60px;
+            left: 120px;
+            background-color: rgba(28, 28, 28, 0.95);
+            border-radius: 8px;
+            padding: 8px 0;
+            min-width: 180px;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .settings-menu.active {
+            display: block;
+        }
+
+        .settings-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .settings-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .settings-item.active {
+            color: #ff0000;
+        }
+
+        .video-info-section {
+            margin-top: 16px;
+        }
+
+        .video-title {
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+
+        .video-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #272727;
+        }
+
+        .video-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            background-color: #272727;
+            border: none;
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .action-btn:hover {
+            background-color: #3f3f3f;
+        }
+
+        .action-btn.liked {
+            color: #ff0000;
+        }
+
+        .comments-section {
+            margin-top: 24px;
+        }
+
+        .comments-header {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
+
+        .comment-input {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .comment-input input {
+            flex: 1;
+            background-color: transparent;
+            border: none;
+            border-bottom: 1px solid #272727;
+            color: #fff;
+            padding: 8px 0;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .comment-input input:focus {
+            border-bottom-color: #fff;
+        }
+
+        .comment-input button {
+            background-color: #cc0000;
+            border: none;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 18px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .comment {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .comment-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff0000, #cc0000);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .comment-content {
+            flex: 1;
+        }
+
+        .comment-author {
+            font-weight: 500;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .comment-text {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        /* الفيديوهات المقترحة */
+        .suggested-videos {
+            width: 400px;
+            flex-shrink: 0;
+        }
+
+        .suggested-title {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
+
+        .suggested-video {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            cursor: pointer;
+        }
+
+        .suggested-video:hover .suggested-video-title {
+            color: #ff0000;
+        }
+
+        .suggested-thumbnail {
+            width: 160px;
+            aspect-ratio: 16/9;
+            background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .suggested-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .suggested-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .suggested-video-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            line-height: 1.3;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .suggested-video-meta {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        /* نافذة الرفع */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            overflow-y: auto;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: #212121;
+            padding: 24px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            margin: 20px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            font-size: 20px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            background-color: #121212;
+            border: 1px solid #303030;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .file-upload {
+            border: 2px dashed #303030;
+            padding: 40px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        .file-upload:hover {
+            border-color: #ff0000;
+        }
+
+        .file-upload input {
+            display: none;
+        }
+
+        .thumbnail-preview {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+
+        .upload-progress {
+            margin-top: 12px;
+            background-color: #272727;
+            height: 4px;
+            border-radius: 2px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .upload-progress.active {
+            display: block;
+        }
+
+        .upload-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #ff0000, #cc0000);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: #cc0000;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .submit-btn:hover {
+            background-color: #ff0000;
+        }
+
+        .submit-btn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+
+        /* التجاوب مع الشاشات */
+        @media (max-width: 1200px) {
+            .player-container {
+                flex-direction: column;
+            }
+
+            .suggested-videos {
+                width: 100%;
+            }
+
+            .suggested-video {
+                max-width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 8px 12px;
+            }
+
+            .logo img {
+                width: 80px;
+            }
+
+            .search-container {
+                max-width: none;
+            }
+
+            .upload-btn span:last-child {
+                display: none;
+            }
+
+            .main-content {
+                padding: 12px;
+            }
+
+            .videos-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 12px;
+            }
+
+            .player-container {
+                padding: 12px;
+            }
+
+            .video-title {
+                font-size: 16px;
+            }
+
+            .suggested-videos {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .videos-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .video-actions {
+                flex-wrap: wrap;
+            }
+
+            .action-btn {
+                font-size: 12px;
+                padding: 8px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- شاشة البداية -->
+    <div id="splash-screen">
+        <img class="splash-logo" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 150'%3E%3Crect x='10' y='20' width='180' height='110' rx='15' fill='%23cc0000'/%3E%3Cpath d='M80 50 L80 100 L130 75 Z' fill='white'/%3E%3Cellipse cx='130' cy='75' rx='45' ry='35' fill='none' stroke='white' stroke-width='4'/%3E%3Ctext x='210' y='95' font-family='Arial Black' font-size='55' font-weight='bold' fill='%23fff'%3EVIDS%3Ctext x='390' y='95' fill='%23cc0000'%3EPHERE%3C/text%3E%3C/text%3E%3C/svg%3E" alt="VidSphere">
+        <div class="splash-loading-bar">
+            <div class="splash-loading-progress"></div>
+        </div>
+    </div>
+
+    <!-- شريط التحميل -->
+    <div id="loading-bar"></div>
+
+    <!-- الهيدر -->
+    <header>
+        <div class="logo" onclick="showHome()">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 150'%3E%3Crect x='10' y='20' width='180' height='110' rx='15' fill='%23cc0000'/%3E%3Cpath d='M80 50 L80 100 L130 75 Z' fill='white'/%3E%3Cellipse cx='130' cy='75' rx='45' ry='35' fill='none' stroke='white' stroke-width='4'/%3E%3Ctext x='210' y='95' font-family='Arial Black' font-size='55' font-weight='bold' fill='%23fff'%3EVIDS%3Ctext x='390' y='95' fill='%23cc0000'%3EPHERE%3C/text%3E%3C/text%3E%3C/svg%3E" alt="VidSphere">
+        </div>
+
+        <div class="search-container">
+            <input type="text" class="search-input" id="searchInput" placeholder="بحث" onkeypress="if(event.key==='Enter') searchVideos()">
+            <button class="search-btn" onclick="searchVideos()">🔍</button>
+        </div>
+
+        <div class="header-right">
+            <button class="upload-btn" id="uploadBtn">
+                <span style="font-size:20px;">➕</span> <span>رفع فيديو</span>
+            </button>
+            <div id="userSection"></div>
+        </div>
+    </header>
+
+    <!-- الصفحة الرئيسية -->
+    <div class="main-content" id="homePage">
+        <div class="videos-grid" id="videosGrid"></div>
+    </div>
+
+    <!-- صفحة المشغل -->
+    <div class="video-player-page" id="playerPage">
+        <div class="player-container">
+            <div class="player-main">
+                <div class="video-player-wrapper" id="playerWrapper">
+                    <video id="videoElement" controls></video>
+                    <div class="player-controls" id="playerControls">
+                        <button onclick="togglePlay()">▶️</button>
+                        <button onclick="toggleSettings()">⚙️</button>
+                        <button onclick="toggleFullscreen()">⛶</button>
+                    </div>
+                    <div class="settings-menu" id="settingsMenu">
+                        <div class="settings-item" onclick="setQuality('auto')">
+                            <span>جودة تلقائية</span>
+                            <span id="quality-auto">✓</span>
+                        </div>
+                        <div class="settings-item" onclick="setQuality('1080p')">
+                            <span>1080p</span>
+                            <span id="quality-1080p"></span>
+                        </div>
+                        <div class="settings-item" onclick="setQuality('720p')">
+                            <span>720p</span>
+                            <span id="quality-720p"></span>
+                        </div>
+                        <div class="settings-item" onclick="setQuality('480p')">
+                            <span>480p</span>
+                            <span id="quality-480p"></span>
+                        </div>
+                        <div style="border-top:1px solid #404040;margin:8px 0;"></div>
+                        <div class="settings-item" onclick="setSpeed(0.5)">
+                            <span>0.5x</span>
+                            <span id="speed-0.5"></span>
+                        </div>
+                        <div class="settings-item" onclick="setSpeed(1)">
+                            <span>عادي</span>
+                            <span id="speed-1">✓</span>
+                        </div>
+                        <div class="settings-item" onclick="setSpeed(1.25)">
+                            <span>1.25x</span>
+                            <span id="speed-1.25"></span>
+                        </div>
+                        <div class="settings-item" onclick="setSpeed(1.5)">
+                            <span>1.5x</span>
+                            <span id="speed-1.5"></span>
+                        </div>
+                        <div class="settings-item" onclick="setSpeed(2)">
+                            <span>2x</span>
+                            <span id="speed-2"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="video-info-section">
+                    <h1 class="video-title" id="playerTitle"></h1>
+                    <div class="video-stats">
+                        <div>
+                            <span id="playerViews"></span>
+                        </div>
+                        <div class="video-actions">
+                            <button class="action-btn" id="likeBtn" onclick="toggleLike()">
+                                <span>👍</span> <span id="likeText">إعجاب</span>
+                            </button>
+                            <button class="action-btn" onclick="shareVideo()">
+                                <span>↗️</span> <span>مشاركة</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="comments-section">
+                        <div class="comments-header"><span id="commentsCount">0</span> تعليق</div>
+                        <div class="comment-input" id="commentInputSection" style="display:flex;">
+                            <input type="text" id="commentText" placeholder="أضف تعليقاً...">
+                            <button onclick="addComment()">نشر</button>
+                        </div>
+                        <div id="commentsList"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="suggested-videos">
+                <div class="suggested-title">فيديوهات مقترحة</div>
+                <div id="suggestedVideos"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة الرفع -->
+    <div class="modal" id="uploadModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>رفع فيديو</h2>
+                <button class="close-btn" onclick="closeUploadModal()">✕</button>
+            </div>
+            <form onsubmit="uploadVideo(event)">
+                <div class="form-group">
+                    <label>ملف الفيديو</label>
+                    <div class="file-upload" onclick="document.getElementById('videoFile').click()">
+                        <input type="file" id="videoFile" accept="video/*" onchange="handleVideoSelect(event)" required>
+                        <p id="videoFileInfo">📹 انقر لاختيار ملف فيديو</p>
+                    </div>
+                    <div class="upload-progress" id="uploadProgress">
+                        <div class="upload-progress-bar" id="uploadProgressBar"></div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>الصورة المصغرة (اختياري)</label>
+                    <div class="file-upload" onclick="document.getElementById('thumbnailFile').click()">
+                        <input type="file" id="thumbnailFile" accept="image/*" onchange="handleThumbnailSelect(event)">
+                        <p id="thumbnailFileInfo">🖼️ انقر لاختيار صورة مصغرة</p>
+                    </div>
+                    <img id="thumbnailPreview" class="thumbnail-preview" style="display:none;">
+                </div>
+                <div class="form-group">
+                    <label>عنوان الفيديو</label>
+                    <input type="text" id="videoTitle" required placeholder="أضف عنواناً جذاباً">
+                </div>
+                <div class="form-group">
+                    <label>الوصف</label>
+                    <textarea id="videoDescription" placeholder="أخبر المشاهدين عن محتوى الفيديو"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>الفئة</label>
+                    <select id="videoCategory">
+                        <option value="technology">التكنولوجيا</option>
+                        <option value="travel">السفر</option>
+                        <option value="cooking">الطبخ</option>
+                        <option value="sports">الرياضة</option>
+                        <option value="education">التعليم</option>
+                        <option value="entertainment">الترفيه</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>اسم القناة (اختياري)</label>
+                    <input type="text" id="channelName" placeholder="اسم قناتك">
+                </div>
+                <button type="submit" class="submit-btn" id="submitBtn">نشر الفيديو</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
         let videos = [];
         let currentVideo = null;
         let currentQuality = 'auto';
         let currentSpeed = 1;
         let isLiked = false;
         let comments = [];
+        let isDataLoaded = false;
 
-        // إخفاء شاشة البداية
-        window.onload = function() {
+        // إخفاء شاشة البداية وتهيئة التطبيق
+        window.onload = async function() {
+            console.log('🚀 بدء تشغيل التطبيق...');
+            
+            // تحميل معلومات المستخدم أولاً
+            loadUserData();
+            
+            // تحميل البيانات
+            await loadData();
+            
+            // إخفاء شاشة البداية
             setTimeout(() => {
                 document.getElementById('splash-screen').classList.add('hide');
                 setTimeout(() => {
@@ -15,10 +958,87 @@ let currentUser = null;
                 }, 500);
             }, 1500);
 
-            loadData();
+            // تهيئة التسجيل وعرض الصفحة الرئيسية
             setTimeout(initAuth, 1000);
-            showHome();
+            setTimeout(showHome, 1600);
         };
+
+        // تحميل معلومات المستخدم من localStorage
+        function loadUserData() {
+            try {
+                const savedUser = localStorage.getItem('vidsphere_user');
+                if (savedUser) {
+                    currentUser = JSON.parse(savedUser);
+                    console.log('✅ تم تحميل بيانات المستخدم:', currentUser.name);
+                }
+            } catch (error) {
+                console.error('❌ خطأ في تحميل بيانات المستخدم:', error);
+                currentUser = null;
+            }
+        }
+
+        // تحميل البيانات من التخزين المشترك
+        async function loadData() {
+            console.log('🔄 بدء تحميل الفيديوهات...');
+            
+            // التحقق من توفر window.storage
+            if (typeof window.storage === 'undefined') {
+                console.log('⚠️ التخزين المشترك غير متاح بعد');
+                videos = [];
+                isDataLoaded = true;
+                return;
+            }
+            
+            try {
+                // تحميل الفيديوهات من التخزين المشترك
+                const result = await window.storage.list('videos:', true);
+                
+                if (result && result.keys && result.keys.length > 0) {
+                    console.log(`📦 جاري تحميل ${result.keys.length} فيديو...`);
+                    videos = [];
+                    
+                    for (const key of result.keys) {
+                        try {
+                            const videoData = await window.storage.get(key, true);
+                            if (videoData && videoData.value) {
+                                const video = JSON.parse(videoData.value);
+                                videos.push(video);
+                            }
+                        } catch (e) {
+                            console.log('⚠️ تخطي فيديو:', key);
+                        }
+                    }
+                    
+                    // ترتيب الفيديوهات من الأحدث للأقدم
+                    videos.sort((a, b) => b.id - a.id);
+                    console.log(`✅ تم تحميل ${videos.length} فيديو بنجاح`);
+                } else {
+                    console.log('📭 لا توجد فيديوهات محفوظة');
+                    videos = [];
+                }
+            } catch (error) {
+                console.log('⚠️ التخزين فارغ أو حدث خطأ:', error.message);
+                videos = [];
+            }
+            
+            isDataLoaded = true;
+        }
+
+        async function saveData() {
+            if (!window.storage) {
+                console.error('❌ التخزين المشترك غير متاح');
+                return;
+            }
+            
+            // حفظ كل فيديو في مفتاح منفصل
+            for (const video of videos) {
+                try {
+                    await window.storage.set(`videos:${video.id}`, JSON.stringify(video), true);
+                } catch (error) {
+                    console.error('❌ خطأ في حفظ الفيديو:', error);
+                }
+            }
+        }
 
         // تهيئة التسجيل
         function initAuth() {
@@ -31,8 +1051,477 @@ let currentUser = null;
             renderUserSection();
         }
 
-        // تحميل معلومات المستخدم من localStorage فقط
-        function loadUserData() {
-            const savedUser = localStorage.getItem('vidsphere_user');
-            if (savedUser) currentUser = JSON.parse(savedUser);
+        function handleCredentialResponse(response) {
+            const credential = parseJwt(response.credential);
+            currentUser = {
+                name: credential.name,
+                email: credential.email,
+                picture: credential.picture
+            };
+            localStorage.setItem('vidsphere_user', JSON.stringify(currentUser));
+            renderUserSection();
         }
+
+        function parseJwt(token) {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        }
+
+        function renderUserSection() {
+            const userSection = document.getElementById('userSection');
+            const uploadBtn = document.getElementById('uploadBtn');
+
+            if (currentUser) {
+                userSection.innerHTML = `<img src="${currentUser.picture}" class="user-avatar" onclick="logout()" title="${currentUser.name}">`;
+                uploadBtn.onclick = openUploadModal;
+            } else {
+                if (typeof google !== 'undefined' && google.accounts) {
+                    userSection.innerHTML = '<div id="googleSignInDiv"></div>';
+                    google.accounts.id.renderButton(
+                        document.getElementById('googleSignInDiv'),
+                        { theme: 'filled_blue', size: 'medium', text: 'signin', locale: 'ar' }
+                    );
+                } else {
+                    userSection.innerHTML = `<button onclick="manualLogin()" style="background-color:#1a73e8;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:500;">تسجيل الدخول</button>`;
+                }
+                uploadBtn.onclick = openUploadModal;
+            }
+        }
+
+        function manualLogin() {
+            const name = prompt('أدخل اسمك:');
+            if (name && name.trim()) {
+                currentUser = {
+                    name: name.trim(),
+                    email: name.trim().toLowerCase().replace(/\s+/g, '') + '@vidsphere.com',
+                    picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=cc0000&color=fff&size=128`
+                };
+                localStorage.setItem('vidsphere_user', JSON.stringify(currentUser));
+                renderUserSection();
+                alert('مرحباً ' + name + '! 👋');
+            }
+        }
+
+        function logout() {
+            if (confirm('هل تريد تسجيل الخروج؟')) {
+                currentUser = null;
+                localStorage.removeItem('vidsphere_user');
+                renderUserSection();
+                showHome();
+            }
+        }
+
+        // الصفحة الرئيسية
+        function showHome() {
+            document.getElementById('homePage').style.display = 'block';
+            document.getElementById('playerPage').classList.remove('active');
+            displayVideos();
+        }
+
+        function displayVideos() {
+            const grid = document.getElementById('videosGrid');
+            grid.innerHTML = '';
+
+            if (videos.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column:1/-1;text-align:center;padding:60px 20px;">
+                        <div style="font-size:80px;margin-bottom:20px;">📹</div>
+                        <h2 style="margin-bottom:16px;font-size:24px;">مرحباً بك في VidSphere!</h2>
+                        <p style="color:#aaa;margin-bottom:24px;font-size:16px;">لا توجد فيديوهات حتى الآن</p>
+                        ${currentUser ? `<button onclick="openUploadModal()" style="background-color:#cc0000;color:#fff;border:none;padding:12px 24px;border-radius:24px;cursor:pointer;font-size:16px;font-weight:500;">📹 ارفع أول فيديو</button>` : `<p style="color:#888;">سجل الدخول لرفع الفيديوهات</p>`}
+                    </div>
+                `;
+                return;
+            }
+
+            videos.forEach(video => {
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.onclick = () => playVideo(video);
+
+                const thumbnailContent = video.thumbnail 
+                    ? `<img src="${video.thumbnail}" alt="${video.title}">`
+                    : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;color:#ff0000;">▶</div>';
+
+                card.innerHTML = `
+                    <div class="video-thumbnail">
+                        ${thumbnailContent}
+                        <div class="video-duration">${video.duration}</div>
+                    </div>
+                    <div class="video-info">
+                        <div class="channel-avatar">${video.userName?.charAt(0) || 'V'}</div>
+                        <div class="video-details">
+                            <h3>${video.title}</h3>
+                            <div class="video-meta">
+                                ${video.userName || 'VidSphere'}<br>
+                                ${video.views} مشاهدة • ${video.uploadTime}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        // تشغيل الفيديو
+        async function playVideo(video) {
+            currentVideo = video;
+            isLiked = false;
+            
+            // تحميل التعليقات من التخزين المشترك
+            if (window.storage) {
+                try {
+                    const commentsData = await window.storage.get(`comments:${video.id}`, true);
+                    comments = commentsData ? JSON.parse(commentsData.value) : [];
+                } catch (error) {
+                    comments = [];
+                }
+            } else {
+                comments = [];
+            }
+
+            document.getElementById('homePage').style.display = 'none';
+            document.getElementById('playerPage').classList.add('active');
+
+            const videoElement = document.getElementById('videoElement');
+            videoElement.src = video.videoUrl;
+            videoElement.playbackRate = currentSpeed;
+
+            document.getElementById('playerTitle').textContent = video.title;
+            document.getElementById('playerViews').textContent = video.views + ' مشاهدة';
+
+            // تحديث عدد المشاهدات
+            video.views = (parseInt(video.views) || 0) + 1;
+            if (window.storage) {
+                try {
+                    await window.storage.set(`videos:${video.id}`, JSON.stringify(video), true);
+                    const index = videos.findIndex(v => v.id === video.id);
+                    if (index !== -1) videos[index] = video;
+                } catch (error) {
+                    console.error('خطأ في تحديث المشاهدات:', error);
+                }
+            }
+
+            document.getElementById('commentInputSection').style.display = 'flex';
+            displayComments();
+            displaySuggestedVideos();
+        }
+
+        // التحكم بالمشغل
+        function togglePlay() {
+            const video = document.getElementById('videoElement');
+            if (video.paused) {
+                video.play();
+            } else {
+                video.pause();
+            }
+        }
+
+        function toggleSettings() {
+            const menu = document.getElementById('settingsMenu');
+            menu.classList.toggle('active');
+        }
+
+        function setQuality(quality) {
+            currentQuality = quality;
+            document.querySelectorAll('[id^="quality-"]').forEach(el => el.textContent = '');
+            document.getElementById('quality-' + quality).textContent = '✓';
+            alert('تم تغيير الجودة إلى: ' + quality);
+        }
+
+        function setSpeed(speed) {
+            currentSpeed = speed;
+            document.getElementById('videoElement').playbackRate = speed;
+            document.querySelectorAll('[id^="speed-"]').forEach(el => el.textContent = '');
+            document.getElementById('speed-' + speed).textContent = '✓';
+        }
+
+        function toggleFullscreen() {
+            const wrapper = document.getElementById('playerWrapper');
+            if (!document.fullscreenElement) {
+                wrapper.requestFullscreen();
+                wrapper.classList.add('fullscreen');
+            } else {
+                document.exitFullscreen();
+                wrapper.classList.remove('fullscreen');
+            }
+        }
+
+        // الإعجاب
+        function toggleLike() {
+            isLiked = !isLiked;
+            const btn = document.getElementById('likeBtn');
+            const text = document.getElementById('likeText');
+            
+            if (isLiked) {
+                btn.classList.add('liked');
+                text.textContent = 'أعجبني';
+            } else {
+                btn.classList.remove('liked');
+                text.textContent = 'إعجاب';
+            }
+        }
+
+        function shareVideo() {
+            alert('تم نسخ رابط الفيديو! 🔗');
+        }
+
+        // التعليقات
+        async function addComment() {
+            const text = document.getElementById('commentText').value.trim();
+            if (!text) return;
+
+            const userName = currentUser ? currentUser.name : 'مستخدم';
+
+            const comment = {
+                id: Date.now(),
+                user: userName,
+                text: text,
+                time: 'الآن'
+            };
+
+            comments.unshift(comment);
+            
+            if (window.storage) {
+                try {
+                    await window.storage.set(`comments:${currentVideo.id}`, JSON.stringify(comments), true);
+                } catch (error) {
+                    console.error('خطأ في حفظ التعليق:', error);
+                }
+            }
+
+            document.getElementById('commentText').value = '';
+            displayComments();
+        }
+
+        function displayComments() {
+            document.getElementById('commentsCount').textContent = comments.length;
+            const list = document.getElementById('commentsList');
+            list.innerHTML = '';
+
+            comments.forEach(comment => {
+                const div = document.createElement('div');
+                div.className = 'comment';
+                div.innerHTML = `
+                    <div class="comment-avatar">${comment.user.charAt(0)}</div>
+                    <div class="comment-content">
+                        <div class="comment-author">${comment.user} • ${comment.time}</div>
+                        <div class="comment-text">${comment.text}</div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // الفيديوهات المقترحة
+        function displaySuggestedVideos() {
+            const container = document.getElementById('suggestedVideos');
+            container.innerHTML = '';
+
+            const suggested = videos.filter(v => v.id !== currentVideo.id).slice(0, 10);
+
+            suggested.forEach(video => {
+                const div = document.createElement('div');
+                div.className = 'suggested-video';
+                div.onclick = () => playVideo(video);
+
+                const thumbnailContent = video.thumbnail 
+                    ? `<img src="${video.thumbnail}" alt="${video.title}">`
+                    : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;color:#ff0000;">▶</div>';
+
+                div.innerHTML = `
+                    <div class="suggested-thumbnail">${thumbnailContent}</div>
+                    <div class="suggested-info">
+                        <div class="suggested-video-title">${video.title}</div>
+                        <div class="suggested-video-meta">${video.userName}<br>${video.views} مشاهدة</div>
+                    </div>
+                `;
+
+                container.appendChild(div);
+            });
+        }
+
+        // البحث
+        function searchVideos() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            if (!query) {
+                displayVideos();
+                return;
+            }
+
+            const results = videos.filter(v => 
+                v.title.toLowerCase().includes(query) ||
+                v.description?.toLowerCase().includes(query)
+            );
+
+            const grid = document.getElementById('videosGrid');
+            grid.innerHTML = '';
+
+            if (results.length === 0) {
+                grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:#aaa;padding:40px;">لا توجد نتائج</p>';
+                return;
+            }
+
+            results.forEach(video => {
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.onclick = () => playVideo(video);
+
+                const thumbnailContent = video.thumbnail 
+                    ? `<img src="${video.thumbnail}">`
+                    : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;color:#ff0000;">▶</div>';
+
+                card.innerHTML = `
+                    <div class="video-thumbnail">
+                        ${thumbnailContent}
+                        <div class="video-duration">${video.duration}</div>
+                    </div>
+                    <div class="video-info">
+                        <div class="channel-avatar">${video.userName?.charAt(0) || 'V'}</div>
+                        <div class="video-details">
+                            <h3>${video.title}</h3>
+                            <div class="video-meta">${video.userName}<br>${video.views} مشاهدة • ${video.uploadTime}</div>
+                        </div>
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        // رفع الفيديو
+        function openUploadModal() {
+            document.getElementById('uploadModal').classList.add('active');
+        }
+
+        function closeUploadModal() {
+            document.getElementById('uploadModal').classList.remove('active');
+            document.getElementById('videoFile').value = '';
+            document.getElementById('thumbnailFile').value = '';
+            document.getElementById('videoTitle').value = '';
+            document.getElementById('videoDescription').value = '';
+            document.getElementById('channelName').value = '';
+            document.getElementById('videoFileInfo').textContent = '📹 انقر لاختيار ملف فيديو';
+            document.getElementById('thumbnailFileInfo').textContent = '🖼️ انقر لاختيار صورة مصغرة';
+            document.getElementById('thumbnailPreview').style.display = 'none';
+            document.getElementById('uploadProgress').classList.remove('active');
+            document.getElementById('uploadProgressBar').style.width = '0%';
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').textContent = 'نشر الفيديو';
+        }
+
+        function handleVideoSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                document.getElementById('videoFileInfo').textContent = `✓ ${file.name}`;
+            }
+        }
+
+        function handleThumbnailSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                document.getElementById('thumbnailFileInfo').textContent = `✓ ${file.name}`;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('thumbnailPreview');
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function uploadVideo(event) {
+            event.preventDefault();
+
+            const videoFile = document.getElementById('videoFile').files[0];
+            const thumbnailFile = document.getElementById('thumbnailFile').files[0];
+            const title = document.getElementById('videoTitle').value;
+            const description = document.getElementById('videoDescription').value;
+            const category = document.getElementById('videoCategory').value;
+            const channelName = document.getElementById('channelName').value.trim();
+
+            if (!videoFile) {
+                alert('الرجاء اختيار ملف فيديو!');
+                return;
+            }
+
+            if (!window.storage) {
+                alert('التخزين المشترك غير متاح. يرجى إعادة تحميل الصفحة.');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            const progress = document.getElementById('uploadProgress');
+            const progressBar = document.getElementById('uploadProgressBar');
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'جاري الرفع...';
+            progress.classList.add('active');
+
+            let uploadPercent = 0;
+            const uploadInterval = setInterval(async () => {
+                uploadPercent += 10;
+                progressBar.style.width = uploadPercent + '%';
+
+                if (uploadPercent >= 100) {
+                    clearInterval(uploadInterval);
+
+                    const videoUrl = URL.createObjectURL(videoFile);
+                    let thumbnailUrl = null;
+                    if (thumbnailFile) {
+                        thumbnailUrl = URL.createObjectURL(thumbnailFile);
+                    }
+
+                    const video = document.createElement('video');
+                    video.src = videoUrl;
+                    video.onloadedmetadata = async function() {
+                        const duration = Math.floor(video.duration);
+                        const minutes = Math.floor(duration / 60);
+                        const seconds = duration % 60;
+                        const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+                        const uploaderName = channelName || (currentUser ? currentUser.name : 'مستخدم VidSphere');
+                        const uploaderEmail = currentUser ? currentUser.email : 'anonymous@vidsphere.com';
+
+                        const newVideo = {
+                            id: Date.now(),
+                            title: title,
+                            description: description,
+                            category: category,
+                            videoUrl: videoUrl,
+                            thumbnail: thumbnailUrl,
+                            userName: uploaderName,
+                            userEmail: uploaderEmail,
+                            views: 0,
+                            uploadTime: 'الآن',
+                            duration: durationStr
+                        };
+
+                        try {
+                            await window.storage.set(`videos:${newVideo.id}`, JSON.stringify(newVideo), true);
+                            videos.unshift(newVideo);
+                            
+                            closeUploadModal();
+                            await loadData();
+                            showHome();
+                            alert('تم رفع الفيديو بنجاح! 🎉 الآن يمكن لجميع المستخدمين مشاهدته!');
+                        } catch (error) {
+                            console.error('خطأ في حفظ الفيديو:', error);
+                            alert('حدث خطأ في حفظ الفيديو: ' + error.message);
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'نشر الفيديو';
+                            progress.classList.remove('active');
+                        }
+                    };
+                }
+            }, 200);
+        }
+    </script>
+</body>
+</html>
