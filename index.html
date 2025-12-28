@@ -921,6 +921,10 @@
                         <option value="entertainment">الترفيه</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>اسم القناة (اختياري)</label>
+                    <input type="text" id="channelName" placeholder="اسم قناتك">
+                </div>
                 <button type="submit" class="submit-btn" id="submitBtn">نشر الفيديو</button>
             </form>
         </div>
@@ -1109,9 +1113,8 @@
             video.views = (parseInt(video.views) || 0) + 1;
             saveData();
 
-            if (currentUser) {
-                document.getElementById('commentInputSection').style.display = 'flex';
-            }
+            // إظهار قسم التعليقات دائماً
+            document.getElementById('commentInputSection').style.display = 'flex';
 
             displayComments();
             displaySuggestedVideos();
@@ -1178,17 +1181,15 @@
 
         // التعليقات
         function addComment() {
-            if (!currentUser) {
-                alert('سجل الدخول لإضافة تعليق');
-                return;
-            }
-
             const text = document.getElementById('commentText').value.trim();
             if (!text) return;
 
+            // استخدام اسم المستخدم إذا كان مسجل، وإلا اسم افتراضي
+            const userName = currentUser ? currentUser.name : 'مستخدم';
+
             const comment = {
                 id: Date.now(),
-                user: currentUser.name,
+                user: userName,
                 text: text,
                 time: 'الآن'
             };
@@ -1298,10 +1299,6 @@
 
         // رفع الفيديو
         function openUploadModal() {
-            if (!currentUser) {
-                alert('الرجاء تسجيل الدخول أولاً! 🔐');
-                return;
-            }
             document.getElementById('uploadModal').classList.add('active');
         }
 
@@ -1311,9 +1308,14 @@
             document.getElementById('thumbnailFile').value = '';
             document.getElementById('videoTitle').value = '';
             document.getElementById('videoDescription').value = '';
+            document.getElementById('channelName').value = '';
             document.getElementById('videoFileInfo').textContent = '📹 انقر لاختيار ملف فيديو';
             document.getElementById('thumbnailFileInfo').textContent = '🖼️ انقر لاختيار صورة مصغرة';
             document.getElementById('thumbnailPreview').style.display = 'none';
+            document.getElementById('uploadProgress').classList.remove('active');
+            document.getElementById('uploadProgressBar').style.width = '0%';
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').textContent = 'نشر الفيديو';
         }
 
         function handleVideoSelect(event) {
@@ -1345,6 +1347,7 @@
             const title = document.getElementById('videoTitle').value;
             const description = document.getElementById('videoDescription').value;
             const category = document.getElementById('videoCategory').value;
+            const channelName = document.getElementById('channelName').value.trim();
 
             if (!videoFile) {
                 alert('الرجاء اختيار ملف فيديو!');
@@ -1381,6 +1384,10 @@
                         const seconds = duration % 60;
                         const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
+                        // استخدام اسم القناة المدخل أو اسم المستخدم أو اسم افتراضي
+                        const uploaderName = channelName || (currentUser ? currentUser.name : 'مستخدم VidSphere');
+                        const uploaderEmail = currentUser ? currentUser.email : 'anonymous@vidsphere.com';
+
                         const newVideo = {
                             id: Date.now(),
                             title: title,
@@ -1388,8 +1395,8 @@
                             category: category,
                             videoUrl: videoUrl,
                             thumbnail: thumbnailUrl,
-                            userName: currentUser.name,
-                            userEmail: currentUser.email,
+                            userName: uploaderName,
+                            userEmail: uploaderEmail,
                             views: 0,
                             uploadTime: 'الآن',
                             duration: durationStr,
